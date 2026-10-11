@@ -30,14 +30,14 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ Not translated — no result'))+'</div>'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'</div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Only preset demo phrases translate.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
-const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선희 Online (Natural)','Microsoft 인준 Online (Natural)'];
-const voiceAliases=[['steffan'],['yan'],['선희','sunhi','seonhee','sun hee'],['인준','injun','injoon']];
+const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선히 Online (Natural)','Microsoft 인준 Online (Natural)'];
+const voiceAliases=[['steffan'],['yan'],['선히','선희','sunhi','seonhee','sun hee'],['인준','injun','injoon']];
 function voiceKey(s){return String(s).normalize('NFKC').toLowerCase().replace(/[^a-z0-9가-힣]/g,'')}
 function voiceMatch(v,i){
  const lang=String(v.lang).toLowerCase().replace('_','-');
  if(i<2?!lang.startsWith('en'):!lang.startsWith('ko'))return false;
  const hay=voiceKey(v.name+' '+v.voiceURI);
- return voiceAliases[i].some(alias=>hay.includes(voiceKey(alias)))&&(/microsoft/i.test(v.name+' '+v.voiceURI)||voiceKey(v.name).includes('선희')||voiceKey(v.name).includes('인준'));
+ return voiceAliases[i].some(alias=>hay.includes(voiceKey(alias)))&&(/microsoft/i.test(v.name+' '+v.voiceURI)||voiceKey(v.name).includes('선히')||voiceKey(v.name).includes('선희')||voiceKey(v.name).includes('인준'));
 }
 function allowedVoice(v){return voiceAliases.some((_,i)=>voiceMatch(v,i))}
 function voiceRank(v,language){
