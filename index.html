@@ -7,7 +7,7 @@
 </style></head>
 <body><div class="layout"><aside class="aside"><div><div class="logo">fokat<span>.</span></div><div class="eyebrow">talk freely, everywhere</div></div><button id="new" class="button">＋ New conversation</button><div class="sessions" id="sessions"></div><div class="panel"><strong>Research prototype / P0</strong><p class="note">Voice recognition depends on browser support. The phrasebook only translates a few exact sample phrases.</p></div><div class="note">No account, no server. Saving is optional and uses unencrypted browser storage. Do not use with sensitive conversations.</div></aside>
 <main class="main"><div class="top"><div class="eyebrow">MULTILINGUAL CONVERSATION LAB</div><div class="pill" id="badge">● Demo phrasebook</div></div><section class="hero"><div><h1>Every voice deserves<br>to be heard.</h1><p>Speak. Understand. Remember.</p></div><div class="circle" aria-hidden="true">◉</div></section>
-<div class="controls"><select id="direction" aria-label="Translation direction"><option value="en-ko">English → Korean</option><option value="ko-en">Korean → English</option></select><button class="ghost" id="swap">⇄ Swap</button><button class="ghost" id="demo">Load demo exchange</button><label class="toggle"><input id="autoflow" type="checkbox"> Voice conversation mode</label><label class="toggle"><input id="other" type="checkbox"> Other person speaking</label><label class="toggle"><input id="autoplay" type="checkbox" checked> Speak translations</label><label class="toggle"><input type="checkbox" id="online"> Online translation (third party)</label></div>
+<div class="controls"><select id="direction" aria-label="Translation direction"><option value="en-ko">English → Korean</option><option value="ko-en">Korean → English</option></select><button class="ghost" id="swap">⇄ Swap</button><button class="ghost" id="demo">Load demo exchange</button><label class="toggle"><input id="autoflow" type="checkbox"> Voice conversation mode</label><label class="toggle"><input id="other" type="checkbox"> Other person speaking</label><label class="toggle"><input id="autoplay" type="checkbox" checked> Speak translations</label><select id="voice" aria-label="Speech voice"><option value="">Auto-select voice</option></select><label class="toggle">Speed <input id="rate" type="range" min="0.75" max="1.15" step="0.05" value="0.95"></label><span id="rateval" class="small">0.95×</span><label class="toggle"><input type="checkbox" id="online"> Online translation (third party)</label></div>
 <div class="actionrow"><label class="toggle"><input id="save" type="checkbox"> Save conversations on this device (opt-in)</label><div class="actions"><button class="ghost" id="export">Export JSON</button><button class="ghost" id="metrics">Export timings</button><button class="ghost" id="clear">Delete current</button></div></div>
 <div class="chat" id="chat" role="log" aria-live="polite"></div>
 <div class="composer"><textarea id="message" placeholder="Type a phrase, or tap the microphone…" aria-label="Message" maxlength="2000"></textarea><button class="ghost" id="mic" title="Dictate one utterance">🎙 Mic</button><button class="button" id="send">Send ↗</button></div><div class="status" role="status" id="status"></div><div class="foot">⚠️ External translation is opt-in and sends entered text to MyMemory. Otherwise, only sample phrases translate. Browser dictation may send audio to your browser provider. Ask permission before recording people. Select 'Other person speaking' to label the next turn, swap source language when necessary, and tap Mic for each turn to avoid accidentally replaying its own speech. Playback follows your browser/OS audio route; no Bluetooth speaker override is implemented.</div></main></div>
@@ -29,7 +29,40 @@ function getSession(){return sessions.find(s=>s.id===current)||null}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ Not translated — no result'))+'</div>'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'</div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Only preset demo phrases translate.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
-function speakTranslation(msg){return new Promise(resolve=>{if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return;}try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(msg.translation);u.lang=msg.lang==='en'?'ko-KR':'en-US';u.rate=.9;u.onend=()=>resolve(true);u.onerror=()=>resolve(false);speechSynthesis.speak(u);}catch{resolve(false)}})}
+function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
+function voiceRank(v,language){
+ const name=v.name.toLowerCase();
+ let score=0;
+ if(v.lang.toLowerCase()===language.toLowerCase())score+=100;
+ else if(v.lang.toLowerCase().startsWith(language.slice(0,2).toLowerCase()))score+=60;
+ else return -999;
+ if(/natural|neural|premium|enhanced|google|microsoft/.test(name))score+=25;
+ if(/compact|espeak|robot/.test(name))score-=15;
+ return score;
+}
+function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
+function populateVoices(){
+ const select=$('voice'),previous=select.value;
+ const voiceList=availableVoices().filter(v=>/^(en|ko)(-|$)/i.test(v.lang));
+ select.innerHTML='<option value="">Auto-select voice</option>';
+ voiceList.forEach(v=>{const option=document.createElement('option');option.value=v.voiceURI;option.textContent=v.name+' ('+v.lang+')';select.append(option)});
+ if(voiceList.some(v=>v.voiceURI===previous))select.value=previous;
+ status(voiceList.length?'Available English/Korean voices: '+voiceList.length+'. Quality depends on installed voices.':'No English/Korean system voices detected yet.');
+}
+function speakTranslation(msg){return new Promise(resolve=>{
+ if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return}
+ try{
+  speechSynthesis.cancel();
+  const lang=outputLang(msg),voices=availableVoices();
+  const preferred=voices.find(v=>v.voiceURI===$('voice').value&&voiceRank(v,lang)>-999);
+  const chosen=preferred||voices.slice().sort((a,b)=>voiceRank(b,lang)-voiceRank(a,lang))[0];
+  const u=new SpeechSynthesisUtterance(msg.translation);
+  u.lang=lang;u.rate=Number($('rate').value);
+  if(chosen&&voiceRank(chosen,lang)>-999)u.voice=chosen;
+  u.onend=()=>resolve(true);u.onerror=()=>resolve(false);
+  speechSynthesis.speak(u);
+ }catch{resolve(false)}
+})}
 async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const translation=lex[source+':'+clean(text)];const online=$('online').checked;const msg={who,lang:source,text,translation:online?null:translation||null,ok:!online&&!!translation,pending:online,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online){status(translation?'Translated with demo phrasebook':'Not translated. Enable online translation for arbitrary text.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
 status('Translating with MyMemory…');
 try{
@@ -58,7 +91,7 @@ $('clear').onclick=()=>{if(!confirm('Delete the current conversation from this b
 $('metrics').onclick=()=>{const blob=new Blob([JSON.stringify({schema:'fokat-timings-v1',note:'Browser wall-clock approximations; not ASR quality or acoustic latency measurements',records:timings},null,2)],{type:'application/json'});const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='fokat-timings.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000)};
 $('export').onclick=()=>{const payload=getSession()?[getSession()]:ephemeral.length?[{name:'Unsaved session',messages:ephemeral}]:[];const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='fokat-conversation.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);status('Exported conversation JSON')};
 $('demo').onclick=()=>{const rows=[['hello','me','en'],['안녕하세요','other','ko'],['can i order something vegetarian?','me','en'],['주방은 오후 9시에 문을 닫아요.','other','ko']];rows.forEach(([t,w,l])=>add(t,w,l));status('Loaded labelled sample dialogue. Not a live translation test.')};
-$('chat').onclick=e=>{const b=e.target.closest('[data-play]');if(!b)return;const m=(getSession()?.messages||ephemeral)[Number(b.dataset.play)];if(!m?.translation||!('speechSynthesis' in window))return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(m.translation);u.lang=m.lang==='en'?'ko-KR':'en-US';u.rate=.9;speechSynthesis.speak(u)};
+$('chat').onclick=e=>{const b=e.target.closest('[data-play]');if(!b)return;const m=(getSession()?.messages||ephemeral)[Number(b.dataset.play)];if(!m?.translation||!('speechSynthesis' in window))return;speakTranslation(m)};
 $('mic').onclick=()=>{const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R){status('SpeechRecognition unavailable. Try Chrome or Edge with supported microphone permissions.');return}
 if(recognition){recognition.stop();return}
 if(voiceBusy||('speechSynthesis' in window&&speechSynthesis.speaking)){status('Finish audio playback before listening.');return}
@@ -73,6 +106,8 @@ if(automatic&&heard&&!failed){voiceBusy=true;try{$('message').value='';await add
 try{r.start()}catch(e){recognition=null;document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';status('Could not start recognition: '+e.message)}};
 $('autoflow').onchange=()=>status($('autoflow').checked?'Voice mode: microphone captures one utterance, translates it, and speaks once. Tap Mic again for the next turn.':'Voice mode off: dictation fills the text box for review.');
 $('online').onchange=()=>{const on=$('online').checked;$('badge').textContent=on?'● MyMemory online':'● Demo phrasebook';status(on?'Online translation will transmit entered text to MyMemory. Avoid sensitive content.':'Sample phrasebook only.');};
+$('rate').oninput=()=>{$('rateval').textContent=Number($('rate').value).toFixed(2)+'×'};
+if('speechSynthesis' in window){populateVoices();speechSynthesis.addEventListener('voiceschanged',populateVoices)}
 render();
 })();
 </script></body></html>
