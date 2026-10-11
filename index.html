@@ -30,34 +30,26 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ Not translated — no result'))+'</div>'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'</div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Only preset demo phrases translate.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
-const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선희 Online (Natural)','Microsoft 인준 Online (Natural)'];
-function allowedVoice(v){return preferredVoiceNames.some(n=>v.name.toLowerCase().includes(n.toLowerCase()))}
+function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function voiceRank(v,language){
- if(!allowedVoice(v))return -999;
- const lang=v.lang.toLowerCase(),want=language.toLowerCase();
- if(want==='ko-kr')return lang==='ko-kr'?100:-999;
- if(want==='en-us')return lang==='en-us'?100:(lang==='en-hk'?90:-999);
+ const lang=v.lang.toLowerCase().replace('_','-'),want=language.toLowerCase();
+ if(lang===want)return 100;
+ if(lang.startsWith(want.slice(0,2)+'-')||lang===want.slice(0,2))return 80;
  return -999;
 }
-function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function populateVoices(){
  const select=$('voice'),previous=select.value;
- const voices=availableVoices();
- select.innerHTML='<option value="">Auto-select approved voice</option>';
- preferredVoiceNames.forEach(name=>{
-  const normalized=x=>x.toLowerCase().replace(/[()]/g,' ').replace(/\s+/g,' ').trim();
-  const expected=normalized(name);
-  const found=voices.find(v=>normalized(v.name).includes(expected)) ||
-    voices.find(v=>normalized(v.name).includes(normalized(name.replace(' Online (Natural)','')))&&/natural/i.test(v.name));
+ const voices=availableVoices().filter(v=>/^(en|ko)([-_]|$)/i.test(v.lang));
+ voices.sort((a,b)=>a.lang.localeCompare(b.lang)||a.name.localeCompare(b.name));
+ select.innerHTML='<option value="">Auto-select matching language</option>';
+ for(const v of voices){
   const option=document.createElement('option');
-  option.value=found?found.voiceURI:name;
-  option.textContent=name+(found?'':' — unavailable in this browser');
-  option.disabled=!found;
+  option.value=v.voiceURI;
+  option.textContent=v.name+' ('+v.lang+')'+(v.localService?' · on-device':' · online/service');
   select.append(option);
- });
- if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
- const availableKorean=voices.filter(v=>/ko(-|_)?KR/i.test(v.lang)&&allowedVoice(v));
- status('Korean voices detected: '+availableKorean.length+'/2. Missing voices depend on Edge/Windows voice availability.');
+ }
+ if([...select.options].some(o=>o.value===previous))select.value=previous;
+ status(voices.length+' English/Korean browser voice(s) available. On-device status is browser-reported; external voice services may need internet.');
 }
 function speakTranslation(msg){return new Promise(resolve=>{
  if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return}
