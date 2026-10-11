@@ -36,7 +36,7 @@ Compare against a standard translation workflow under consented English/Korean r
 
 Keep raw measurements, versions, environment, and failures. Do not present demo phrases as model results.
 
-## Next technical phase
+## Web-first decision (October 2026)\nThe web application is the primary product and research testbed. Native Android development is paused. The `android/` directory remains an experimental hardware-feasibility scaffold, not an APK release path or a verified mobile application. Do not migrate features or develop an APK until the web experience works and has been tested.\n\nWeb validation priorities: live bilingual voice turns, browser-device audio behavior, robust consent-based history, mobile UI, and error/latency measurements. Web browser audio routing may not support independent earbud-versus-phone outputs.\n\n## Next technical phase
 Implement a replaceable pipeline for ASR, translation, and TTS, beginning with push-to-talk rather than unbounded ambient recording. Then build an Android prototype for genuine Bluetooth earbud/phone-speaker routing and permissions.
 
 ## Privacy
