@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "benchmark.html"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 permissions:
@@ -27,7 +28,7 @@ jobs:
       - name: Prepare static artifact
         run: |
           mkdir -p public
-          cp index.html public/index.html
+          cp index.html benchmark.html public/
           touch public/.nojekyll
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
