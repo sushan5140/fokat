@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fokat Translation Lab</title>
+<style>:root{font-family:Inter,system-ui,sans-serif;color:#293526;background:#f5f6ef}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1050px;margin:auto;padding:28px 18px}header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.brand{font-size:29px;font-weight:900;letter-spacing:-1px}.brand span{color:#75a241}a{color:#45652d}h1{font-size:clamp(26px,4vw,39px);margin:25px 0 5px}p{line-height:1.6;color:#697762}.card{background:white;border:1px solid #e4e9dc;border-radius:20px;padding:19px;margin:16px 0}button{border:0;border-radius:12px;padding:11px 15px;background:#d0f67d;color:#25371c;font-weight:800;cursor:pointer}button.secondary{background:#edf1e7}button:disabled{opacity:.45;cursor:not-allowed}.actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.case{padding:15px;border:1px solid #e5eadf;border-radius:14px;margin:11px 0;background:#fff}.case strong{font-size:12px;color:#587a42}.source{font-size:16px;font-weight:700;margin:8px 0}.expected{font-size:13px;color:#72816a}.output{white-space:pre-wrap;line-height:1.5;margin:12px 0;padding:12px;border-radius:10px;background:#f5f7ef;min-height:45px}.rating{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.rating label{font-size:13px}select,input{padding:9px;border-radius:9px;border:1px solid #ccd7c7;background:white}.meta{font-size:12px;color:#778472}#status{font-weight:700;color:#54723e}footer{font-size:12px;color:#778472;margin-top:22px}@media(max-width:600px){.wrap{padding:18px 10px}.card{padding:13px}}</style></head>
+<body><div class="wrap"><header><div class="brand">fokat<span>.</span> / translation lab</div><a href="./">← Back to translator</a></header>
+<h1>Can Fokat translate a real conversation?</h1><p>A transparent EN↔KO quality benchmark. Run each case yourself, judge its meaning, and export the results. This lab uses the same public MyMemory endpoint as the app; it does <b>not</b> send your conversation history.</p>
+<div class="card"><div class="actions"><button id="next">Test next case</button><button id="all" class="secondary">Run remaining sequentially</button><button id="stop" class="secondary">Stop</button><button id="export" class="secondary">Export results JSON</button><button id="csv" class="secondary">Export CSV</button><button id="reset" class="secondary">Clear lab results</button></div>
+<p class="meta">Each test sends its predefined sentence to MyMemory. Rate translation meaning manually: Pass / Partial / Fail. It does not automatically claim an accuracy score. Requests run sequentially with a 1.2-second delay. No API keys used.</p><div id="status" aria-live="polite">Ready · 0/14 cases attempted</div></div>
+<div id="cases"></div><footer>Provider: MyMemory. No model-comparison victory claims without a bilingual human review and matched test conditions. Results remain in this tab until you export them.</footer></div>
+<script>
+const cases=[
+{id:"E01",direction:"en-ko",text:"Thanks.",meaning:"감사합니다",category:"basic"},
+{id:"E02",direction:"en-ko",text:"How are you?",meaning:"어떻게 지내세요? / 잘 지내세요?",category:"basic"},
+{id:"E03",direction:"en-ko",text:"I want to buy a train ticket for tomorrow.",meaning:"내일 기차표를 사고 싶어요.",category:"travel"},
+{id:"E04",direction:"en-ko",text:"I'm down for it, but let's do it tomorrow.",meaning:"좋아요. 그런데 내일 해요.",category:"idiom"},
+{id:"E05",direction:"en-ko",text:"Could you please speak more slowly?",meaning:"좀 더 천천히 말씀해 주시겠어요?",category:"register"},
+{id:"E06",direction:"en-ko",text:"The meeting is at 7:30 p.m. on Friday.",meaning:"금요일 오후 7시 30분에 회의가 있어요.",category:"numbers"},
+{id:"E07",direction:"en-ko",text:"I don't want to cancel the reservation.",meaning:"예약을 취소하고 싶지 않아요.",category:"negation"},
+{id:"E08",direction:"en-ko",text:"Is there a vegetarian option without fish sauce?",meaning:"액젓이 없는 채식 메뉴가 있나요?",category:"food"},
+{id:"K01",direction:"ko-en",text:"안녕하세요.",meaning:"Hello.",category:"basic"},
+{id:"K02",direction:"ko-en",text:"혹시 지하철역이 어디에 있는지 아세요?",meaning:"Do you know where the subway station is?",category:"register"},
+{id:"K03",direction:"ko-en",text:"내일은 시간이 없어서 다음 주에 만나요.",meaning:"I don't have time tomorrow, so let's meet next week.",category:"causality"},
+{id:"K04",direction:"ko-en",text:"그거 진짜 대박이다.",meaning:"That's amazing / unbelievable.",category:"slang"},
+{id:"K05",direction:"ko-en",text:"예약을 취소하지 말아 주세요.",meaning:"Please don't cancel the reservation.",category:"negation"},
+{id:"K06",direction:"ko-en",text:"지금 출발하면 늦지 않을 거예요.",meaning:"If we leave now, we won't be late.",category:"conditional"}
+];
+const results={};let running=false,abortController=null;
+const el=id=>document.getElementById(id);
+function draw(){
+ const root=el('cases');root.replaceChildren();
+ cases.forEach(c=>{
+ const r=results[c.id],box=document.createElement('div');box.className='case';
+ const heading=document.createElement('strong');heading.textContent=c.id+' · '+(c.direction==='en-ko'?'English → Korean':'Korean → English')+' · '+c.category;
+ const src=document.createElement('div');src.className='source';src.textContent=c.text;
+ const exp=document.createElement('div');exp.className='expected';exp.textContent='Meaning reference: '+c.meaning;
+ const out=document.createElement('div');out.className='output';out.textContent=r?(r.error?'⚠ '+r.error:r.translation):'Not run yet';
+ const stats=document.createElement('div');stats.className='meta';stats.textContent=r?'Latency: '+r.latencyMs+' ms · '+(r.error?'Error':'Response received'):'';
+ const rating=document.createElement('div');rating.className='rating';
+ const label=document.createElement('label');label.textContent='Human meaning rating: ';
+ const select=document.createElement('select');select.setAttribute('aria-label',c.id+' rating');
+ for(const [v,t] of [['','Not rated'],['pass','Pass'],['partial','Partial'],['fail','Fail']]){const opt=document.createElement('option');opt.value=v;opt.textContent=t;select.append(opt)}
+ select.value=r?.rating||'';select.disabled=!r||!!r.error;select.onchange=()=>{if(results[c.id])results[c.id].rating=select.value;update()};
+ rating.append(label,select);box.append(heading,src,exp,out,stats,rating);root.append(box)
+ });update()
+}
+function update(){const attempted=Object.keys(results).length,errors=Object.values(results).filter(x=>x.error).length,rated=Object.values(results).filter(x=>x.rating).length;el('status').textContent=(running?'Running · ':'')+attempted+'/'+cases.length+' attempted · '+errors+' errors · '+rated+' human-rated';el('next').disabled=running;el('all').disabled=running;el('stop').disabled=!running}
+async function test(c){
+ const [source,target]=c.direction.split('-'),url=new URL('https://api.mymemory.translated.net/get');
+ url.searchParams.set('q',c.text);url.searchParams.set('langpair',source+'|'+target);
+ abortController=new AbortController();const timeout=setTimeout(()=>abortController?.abort(),12000),start=performance.now();
+ let translation='',error=null;
+ try{const res=await fetch(url,{signal:abortController.signal});if(!res.ok)throw Error('HTTP '+res.status);
+ const data=await res.json();if(data.responseStatus!==200||!data.responseData?.translatedText)throw Error(String(data.responseDetails||'No translation'));
+ translation=String(data.responseData.translatedText).trim();if(target==='ko'&&!/[가-힣]/.test(translation))throw Error('No Korean text returned');
+ }catch(e){error=String(e.message||e)}finally{clearTimeout(timeout);abortController=null}
+ results[c.id]={id:c.id,direction:c.direction,source:c.text,reference:c.meaning,category:c.category,translation,error,latencyMs:Math.round(performance.now()-start),rating:'',timestamp:new Date().toISOString()};draw()
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+el('next').onclick=async()=>{const c=cases.find(c=>!results[c.id]);if(!c)return;running=true;update();await test(c);running=false;update()};
+el('all').onclick=async()=>{running=true;update();for(const c of cases){if(!running)break;if(results[c.id])continue;await test(c);if(running)await sleep(1200)}running=false;update()};
+el('stop').onclick=()=>{running=false;abortController?.abort();update()};
+function download(name,content,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+el('export').onclick=()=>download('fokat-benchmark.json',JSON.stringify({provider:'MyMemory',exportedAt:new Date().toISOString(),results:cases.filter(c=>results[c.id]).map(c=>results[c.id])},null,2),'application/json');
+el('csv').onclick=()=>{const columns=['id','direction','source','reference','translation','error','latencyMs','rating','timestamp'];const rows=[columns.join(','),...cases.filter(c=>results[c.id]).map(c=>columns.map(k=>'"'+String(results[c.id][k]??'').replace(/"/g,'""')+'"').join(','))];download('fokat-benchmark.csv',rows.join('\n'),'text/csv')};
+el('reset').onclick=()=>{if(running)return;if(confirm('Clear this tab\'s benchmark results?')){for(const k of Object.keys(results))delete results[k];draw()}};
+draw();
+</script></body></html>
