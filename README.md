@@ -3,7 +3,7 @@
 
 Fokat is an experimental multilingual conversation interface for travelers and face-to-face conversations. It aims to connect spoken language translation, hands-free listening, and opt-in dialogue memory.
 
-> Status: Phase 0 — interactive research prototype. Translation quality, Bluetooth routing, and speaker isolation are **not validated**.
+> Status: Phase 1 — opt-in remote text translation integrated. Real-world translation quality, browser CORS/runtime behavior, Bluetooth routing, and speaker isolation are **not validated**.
 
 ## Live prototype
 Open `index.html` in a recent Chrome/Edge browser, or enable GitHub Pages (Settings → Pages → Deploy from branch → main / root).
@@ -17,8 +17,8 @@ Open `index.html` in a recent Chrome/Edge browser, or enable GitHub Pages (Setti
 - Transparent **demo phrasebook**: only predefined phrases are translated. Unmatched text is clearly marked as **not translated**. Never mistaken for general-purpose AI translation.
 - No external API requests or credentials.
 
-## Not implemented yet
-- General live speech translation (STT → translation model → TTS).
+## Phase 1 integration\n- Optional MyMemory public translation API mode for English ↔ Korean, using a live HTTP request on each submitted phrase. No provider key is needed for the basic public endpoint, but quotas and availability may change.\n- Disabled by default. Enabling it sends entered or browser-dictated text to MyMemory (a third party); do not transmit private information.\n- Explicit errors, 12-second timeout, pending state, and provider-result label in the message data.\n- Existing demo phrasebook remains the offline default; it is **not** general-purpose translation.\n- Static JavaScript syntax checked after commit, but actual network requests, cross-origin policy, browser speech recognition, and audio-device behavior have **not** been verified in a live browser.\n\n## Not implemented yet
+- Validated, uninterrupted real-time speech interpretation. The browser speech recognition → remote text translation → browser speech synthesis steps exist independently, but the end-to-end audio flow is not yet automated or benchmarked.
 - Continuous listening, automatic speaker identification, echo cancellation validation.
 - Native Android Bluetooth output routing and background support.
 - Offline translation packs or encrypted local database. Browser localStorage is not encrypted; avoid sensitive content.
