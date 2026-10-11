@@ -31,25 +31,33 @@ function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
 function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
+// Curated, known female Korean TTS voice identities only; browser APIs do not expose voice gender.
+const koreanFemaleNames=['선희','sunhi','seonhi','heami','seo-hyeon','seohyeon','jimin','ji-min','yuna','유나','서현'];
+function allowedVoice(v){
+ const name=v.name.toLowerCase(),lang=v.lang.toLowerCase().replace('_','-');
+ if(lang.startsWith('en-'))return name.includes('microsoft steffan')&&/natural/i.test(name);
+ if(lang.startsWith('ko-'))return koreanFemaleNames.some(n=>name.includes(n));
+ return false;
+}
 function voiceRank(v,language){
+ if(!allowedVoice(v))return -999;
  const lang=v.lang.toLowerCase().replace('_','-'),want=language.toLowerCase();
  if(lang===want)return 100;
- if(lang.startsWith(want.slice(0,2)+'-')||lang===want.slice(0,2))return 80;
+ if(lang.startsWith(want.slice(0,2)+'-'))return 80;
  return -999;
 }
 function populateVoices(){
  const select=$('voice'),previous=select.value;
- const voices=availableVoices().filter(v=>/^(en|ko)([-_]|$)/i.test(v.lang));
+ const voices=availableVoices().filter(allowedVoice);
  voices.sort((a,b)=>a.lang.localeCompare(b.lang)||a.name.localeCompare(b.name));
- select.innerHTML='<option value="">Auto-select matching language</option>';
+ select.innerHTML='<option value="">Auto-select approved voice</option>';
  for(const v of voices){
-  const option=document.createElement('option');
-  option.value=v.voiceURI;
+  const option=document.createElement('option');option.value=v.voiceURI;
   option.textContent=v.name+' ('+v.lang+')'+(v.localService?' · on-device':' · online/service');
   select.append(option);
  }
  if([...select.options].some(o=>o.value===previous))select.value=previous;
- status(voices.length+' English/Korean browser voice(s) available. On-device status is browser-reported; external voice services may need internet.');
+ status('Available: '+voices.filter(v=>v.lang.toLowerCase().startsWith('ko')).length+' Korean female voice(s) and '+voices.filter(v=>v.lang.toLowerCase().startsWith('en')).length+' Steffan voice(s).');
 }
 function speakTranslation(msg){return new Promise(resolve=>{
  if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return}
