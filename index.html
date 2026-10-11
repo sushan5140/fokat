@@ -48,18 +48,18 @@ function voiceRank(v,language){
 function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function populateVoices(){
  const select=$('voice'),previous=select.value,voices=availableVoices();
- select.innerHTML='<option value="">Auto-select approved voice</option>';
- preferredVoiceNames.forEach((name,i)=>{
-  const found=voices.find(v=>voiceMatch(v,i));
+ const target=$('direction').value==='en-ko'?'ko':'en';
+ const indexes=target==='ko'?[2,3]:[0,1];
+ select.innerHTML='<option value="">Auto-select '+(target==='ko'?'Korean':'English')+' voice</option>';
+ indexes.forEach(i=>{
+  const name=preferredVoiceNames[i],found=voices.find(v=>voiceMatch(v,i));
   const option=document.createElement('option');
   option.value=found?found.voiceURI:name;
   option.textContent=name+(found?'':' — unavailable in this browser');
-  option.disabled=!found;
-  select.append(option);
+  option.disabled=!found;select.append(option);
  });
  if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
- const count=[2,3].filter(i=>voices.some(v=>voiceMatch(v,i))).length;
- status('Korean voices detected: '+count+'/2. Detection checks voice name and URI.');
+ status((target==='ko'?'Korean':'English')+' output: '+indexes.filter(i=>voices.some(v=>voiceMatch(v,i))).length+'/2 selected voices available.');
 }
 function speakTranslation(msg){return new Promise(resolve=>{
  if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return}
@@ -76,7 +76,7 @@ function speakTranslation(msg){return new Promise(resolve=>{
   speechSynthesis.speak(u);
  }catch{speechFinish=null;resolve(false)}
 })}
-function nextTurn(){if(!$('turns').checked)return;$('other').checked=!$('other').checked;$('direction').value=$('other').checked?'ko-en':'en-ko';status('Ready for '+($('other').checked?'other speaker (Korean)':'you (English)')+'. Tap Mic again.')}
+function nextTurn(){if(!$('turns').checked)return;$('other').checked=!$('other').checked;$('direction').value=$('other').checked?'ko-en':'en-ko';populateVoices();status('Ready for '+($('other').checked?'other speaker (Korean)':'you (English)')+'. Tap Mic again.')}
 function stopEverything(){interrupted=true;recognition?.abort();recognition=null;requestController?.abort();requestController=null;if(speechFinish)speechFinish(false);if('speechSynthesis' in window)speechSynthesis.cancel();document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';voiceBusy=false;status('Stopped. Tap Mic for the next turn.')}
 $('interrupt').onclick=stopEverything;
 async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const translation=lex[source+':'+clean(text)];const online=$('online').checked;const msg={who,lang:source,text,translation:online?null:translation||null,ok:!online&&!!translation,pending:online,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online){status(translation?'Translated with demo phrasebook':'Not translated. Enable online translation for arbitrary text.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
@@ -100,7 +100,7 @@ if(!interrupted&&$('autoflow').checked)nextTurn();
 return msg;
 }
 $('send').onclick=()=>{const v=$('message').value;$('message').value='';add(v,$('other').checked?'other':'me')};$('message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}});
-$('swap').onclick=()=>{$('direction').value=$('direction').value==='en-ko'?'ko-en':'en-ko';status('Input language switched')};
+$('swap').onclick=()=>{$('direction').value=$('direction').value==='en-ko'?'ko-en':'en-ko';populateVoices();status('Output voice list switched with language')};
 $('new').onclick=()=>{if($('save').checked)createSession();else{current=null;ephemeral=[];render()}status('New conversation started')};
 $('sessions').onclick=e=>{const b=e.target.closest('[data-id]');if(b){current=b.dataset.id;ephemeral=[];render()}};
 $('save').onchange=()=>{if($('save').checked){if(ephemeral.length){const s=createSession();s.messages=[...ephemeral];s.name=s.messages[0].text.slice(0,26);ephemeral=[]}else if(!getSession())createSession();persist();status('History saving enabled on this device')}else{localStorage.removeItem(key);sessions=[];current=null;ephemeral=[];render();status('Saved local history removed. New messages will not be saved.')}render()};
@@ -121,7 +121,7 @@ r.onerror=e=>{failed=true;status('Microphone error: '+e.error)};
 r.onend=async()=>{if(recognition!==r)return;recognition=null;document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';
 if(automatic&&heard&&!failed&&!interrupted){voiceBusy=true;try{$('message').value='';await add(heard,who,source)}finally{voiceBusy=false}}};
 try{r.start()}catch(e){recognition=null;document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';status('Could not start recognition: '+e.message)}};
-$('turns').onchange=()=>{if($('turns').checked){$('other').checked=false;$('direction').value='en-ko';status('Alternating mode: you speak English first; the other person speaks Korean next. Tap Mic per turn.')}else status('Manual speaker and language selection enabled.')};
+$('turns').onchange=()=>{if($('turns').checked){$('other').checked=false;$('direction').value='en-ko';populateVoices();status('Alternating mode: you speak English first; the other person speaks Korean next. Tap Mic per turn.')}else status('Manual speaker and language selection enabled.')};
 $('autoflow').onchange=()=>status($('autoflow').checked?'Voice mode: microphone captures one utterance, translates it, and speaks once. Tap Mic again for the next turn.':'Voice mode off: dictation fills the text box for review.');
 $('online').onchange=()=>{const on=$('online').checked;$('badge').textContent=on?'● MyMemory online':'● Demo phrasebook';status(on?'Online translation will transmit entered text to MyMemory. Avoid sensitive content.':'Sample phrasebook only.');};
 $('voiceDiag').onclick=()=>{
@@ -135,6 +135,7 @@ $('voiceDiag').onclick=()=>{
  const close=document.createElement('button');close.className='ghost';close.textContent='Close';close.onclick=()=>dialog.remove();
  dialog.append(header,note,copy,close,pre);document.body.append(dialog);
 };
+$('direction').onchange=()=>populateVoices();
 $('rate').oninput=()=>{$('rateval').textContent=Number($('rate').value).toFixed(2)+'×'};
 if('speechSynthesis' in window){populateVoices();speechSynthesis.addEventListener('voiceschanged',populateVoices)}
 render();
