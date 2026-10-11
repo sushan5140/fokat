@@ -30,41 +30,39 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ Not translated — no result'))+'</div>'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'</div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Only preset demo phrases translate.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
-function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
-// Curated, known female Korean TTS voice identities only; browser APIs do not expose voice gender.
-const koreanFemaleNames=['선희','sunhi','seonhi','heami','seo-hyeon','seohyeon','jimin','ji-min','yuna','유나','서현'];
-function allowedVoice(v){
- const name=v.name.toLowerCase(),lang=v.lang.toLowerCase().replace('_','-');
- if(lang.startsWith('en-'))return name.includes('microsoft steffan')&&/natural/i.test(name);
- if(lang.startsWith('ko-'))return koreanFemaleNames.some(n=>name.includes(n));
- return false;
-}
+const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선희 Online (Natural)','Microsoft 인준 Online (Natural)'];
+function allowedVoice(v){return preferredVoiceNames.some(n=>v.name.toLowerCase().includes(n.toLowerCase()))}
 function voiceRank(v,language){
  if(!allowedVoice(v))return -999;
- const lang=v.lang.toLowerCase().replace('_','-'),want=language.toLowerCase();
- if(lang===want)return 100;
- if(lang.startsWith(want.slice(0,2)+'-'))return 80;
+ const lang=v.lang.toLowerCase(),want=language.toLowerCase();
+ if(want==='ko-kr')return lang==='ko-kr'?100:-999;
+ if(want==='en-us')return lang==='en-us'?100:(lang==='en-hk'?90:-999);
  return -999;
 }
+function availableVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function populateVoices(){
  const select=$('voice'),previous=select.value;
- const voices=availableVoices().filter(allowedVoice);
- voices.sort((a,b)=>a.lang.localeCompare(b.lang)||a.name.localeCompare(b.name));
+ const voices=availableVoices();
  select.innerHTML='<option value="">Auto-select approved voice</option>';
- for(const v of voices){
-  const option=document.createElement('option');option.value=v.voiceURI;
-  option.textContent=v.name+' ('+v.lang+')'+(v.localService?' · on-device':' · online/service');
+ // Show all four requested voices, even if this browser does not provide one.
+ preferredVoiceNames.forEach(name=>{
+  const found=voices.find(v=>v.name.toLowerCase().includes(name.toLowerCase()));
+  const option=document.createElement('option');
+  option.value=name;
+  option.textContent=name+(found?'':' — unavailable on this device');
+  option.disabled=!found;
   select.append(option);
- }
- if([...select.options].some(o=>o.value===previous))select.value=previous;
- status('Available: '+voices.filter(v=>v.lang.toLowerCase().startsWith('ko')).length+' Korean female voice(s) and '+voices.filter(v=>v.lang.toLowerCase().startsWith('en')).length+' Steffan voice(s).');
+ });
+ if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
+ const korean=preferredVoiceNames.slice(2).filter(name=>voices.some(v=>v.name.toLowerCase().includes(name.toLowerCase())));
+ status('Korean voices available: '+korean.length+'/2. Unavailable voices are shown but cannot be selected.');
 }
 function speakTranslation(msg){return new Promise(resolve=>{
  if(!msg?.ok||!msg.translation||!('speechSynthesis' in window)){resolve(false);return}
  try{
   speechSynthesis.cancel();
   const lang=outputLang(msg),voices=availableVoices();
-  const preferred=voices.find(v=>v.voiceURI===$('voice').value&&voiceRank(v,lang)>-999);
+  const preferred=voices.find(v=>v.name.toLowerCase().includes($('voice').value.toLowerCase())&&$('voice').value&&voiceRank(v,lang)>-999);
   const chosen=preferred||voices.filter(v=>voiceRank(v,lang)>-999).sort((a,b)=>voiceRank(b,lang)-voiceRank(a,lang))[0];
   const u=new SpeechSynthesisUtterance(msg.translation);
   u.lang=lang;u.rate=Number($('rate').value);
