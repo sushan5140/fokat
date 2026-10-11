@@ -20,7 +20,7 @@
 const $=id=>document.getElementById(id);
 const key='fokat-p0-history-v1';
 const phrasePairs=[
-['hello','안녕하세요'],['thank you','감사합니다'],['where is the train station?','기차역이 어디예요?'],['how much is this?','이거 얼마예요?'],['can i order something vegetarian?','채식 메뉴를 주문할 수 있을까요?'],['the kitchen closes at 9 pm.','주방은 오후 9시에 문을 닫아요.'],['goodbye','안녕히 가세요'],['yes','네'],['no','아니요'],['please speak slowly','천천히 말씀해 주세요']
+['hello','안녕하세요'],['thanks','감사합니다'],['thank you','감사합니다'],['where is the train station?','기차역이 어디예요?'],['how much is this?','이거 얼마예요?'],['can i order something vegetarian?','채식 메뉴를 주문할 수 있을까요?'],['the kitchen closes at 9 pm.','주방은 오후 9시에 문을 닫아요.'],['goodbye','안녕히 가세요'],['yes','네'],['no','아니요'],['please speak slowly','천천히 말씀해 주세요']
 ];
 const clean=s=>s.normalize('NFKC').trim().toLowerCase().replace(/[.!?。！？]+$/,'').trim();
 const lex={};phrasePairs.forEach(([en,ko])=>{lex['en:'+clean(en)]=ko;lex['ko:'+clean(ko)]=en});
@@ -83,7 +83,7 @@ function speakTranslation(msg){return new Promise(resolve=>{
 function nextTurn(){if(!$('turns').checked)return;$('other').checked=!$('other').checked;$('direction').value=$('other').checked?'ko-en':'en-ko';populateVoices();status('Ready for '+($('other').checked?'other speaker (Korean)':'you (English)')+'. Tap Mic again.')}
 function stopEverything(){interrupted=true;recognition?.abort();recognition=null;requestController?.abort();requestController=null;if(speechFinish)speechFinish(false);if('speechSynthesis' in window)speechSynthesis.cancel();document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';voiceBusy=false;status('Stopped. Tap Mic for the next turn.')}
 $('interrupt').onclick=stopEverything;
-async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const translation=lex[source+':'+clean(text)];const online=$('online').checked;const msg={who,lang:source,text,translation:online?null:translation||null,ok:!online&&!!translation,pending:online,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online){status(translation?'Translated with demo phrasebook':'Demo mode only. Enable real translation (MyMemory) above.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
+async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const translation=lex[source+':'+clean(text)];const online=$('online').checked;const msg={who,lang:source,text,translation:translation||null,ok:!!translation,pending:online&&!translation,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online||translation){status(translation?'Translated with verified phrasebook':'Demo mode only. Enable real translation (MyMemory) above.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
 status('Translating with MyMemory…');
 try{
  if(new TextEncoder().encode(text).length>500)throw Error('Input exceeds 500 bytes');
@@ -94,7 +94,10 @@ try{
  if(interrupted)throw Error('Interrupted');if(!response.ok)throw Error('HTTP '+response.status);
  const data=await response.json();
  if(data.responseStatus!==200||!data.responseData?.translatedText)throw Error('Provider rejected translation: '+String(data.responseDetails||data.responseStatus));
- msg.translation=data.responseData.translatedText;msg.ok=true;msg.provider='MyMemory';
+ const candidate=String(data.responseData.translatedText).trim();
+ if(source==='en'&&target==='ko'&&!/[가-힣]/.test(candidate))throw Error('Provider did not return Korean text');
+ if(source==='en'&&text.trim().split(/\s+/).length<=2&&candidate.length>Math.max(60,text.length*7))throw Error('Suspiciously long result for a short phrase');
+ msg.translation=candidate;msg.ok=true;msg.provider='MyMemory';
  status('Online translation received; verify important meanings.');
 }catch(error){msg.ok=false;status('Translation failed: '+error.message+'. Check network or provider limits.')}
 finally{msg.pending=false;persist();render()}
