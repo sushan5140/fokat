@@ -131,7 +131,7 @@ async function add(text,who='me',lang=null){
  else ephemeral.push(msg);
  persist();render();
  if(!enabled){
-  if(reviewed){msg.translation=reviewed.text;msg.ok=true;msg.provider=reviewed.provider;msg.note=reviewed.note}
+  if(reviewed){msg.translation=reviewed.text;msg.ok=true;msg.provider=reviewed.provider;msg.note=reviewed.note;msg.warnings=reviewed.note?[reviewed.note]:[]}
   else msg.error='Translation disabled. Enable it for arbitrary sentences.';
   msg.pending=false;persist();render();status(msg.ok?'Translated from verified examples.':'Translation disabled.');
   timings.push({mode:'demo',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});
@@ -173,7 +173,7 @@ $('chat').addEventListener('click',e=>{
  const updated=prompt('Correct translation (English/Korean)',m.translation||'');
  if(updated===null)return;
  if(!updated.trim()){status('Correction cannot be empty.');return}
- m.translation=updated.trim();m.ok=true;m.pending=false;m.error=null;m.provider='edited';persist();render();status('Corrected for this conversation. Not used to train the provider.');
+ m.translation=updated.trim();m.ok=true;m.pending=false;m.error=null;m.provider='edited';m.warnings=[];persist();render();status('Corrected for this conversation. Not used to train the provider.');
 });
 $('send').onclick=()=>{const v=$('message').value;$('message').value='';add(v,$('other').checked?'other':'me')};$('message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click()}});
 $('swap').onclick=()=>{$('direction').value=$('direction').value==='en-ko'?'ko-en':'en-ko';populateVoices();status('Output voice list switched with language')};
@@ -199,7 +199,12 @@ if(automatic&&heard&&!failed&&!interrupted){voiceBusy=true;try{$('message').valu
 try{r.start()}catch(e){recognition=null;document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';status('Could not start recognition: '+e.message)}};
 $('turns').onchange=()=>{if($('turns').checked){$('other').checked=false;$('direction').value='en-ko';populateVoices();status('Alternating mode: you speak English first; the other person speaks Korean next. Tap Mic per turn.')}else status('Manual speaker and language selection enabled.')};
 $('autoflow').onchange=()=>status($('autoflow').checked?'Voice mode: microphone captures one utterance, translates it, and speaks once. Tap Mic again for the next turn.':'Voice mode off: dictation fills the text box for review.');
+function updateEngineBadge(){
+ const on=$('online').checked,engine=$('engine').value;
+ $('badge').textContent=!on?'● Translation off':engine==='device'?'● Edge on-device selected':engine==='auto'?'● Auto provider':'● MyMemory online';
+}
 $('engine').onchange=async()=>{
+ updateEngineBadge();
  const selected=$('engine').value;
  if(selected==='online')status('MyMemory online selected. Text goes to a third party.');
  if(selected==='auto')status('Auto: on-device if already available, otherwise MyMemory online.');
@@ -218,7 +223,7 @@ $('prepareDevice').onclick=()=>{
   $('engine').value='device';status('On-device '+from+' → '+to+' is ready. Switch directions to prepare the other pair.');
  }).catch(e=>status('On-device setup unavailable: '+String(e.message||e)));
 };
-$('online').onchange=()=>{const on=$('online').checked;$('badge').textContent=on?'● MyMemory online':'● Demo phrasebook';status(on?'REAL TRANSLATION ENABLED: Text will be sent to MyMemory.':'DEMO MODE: Only preset phrases translate.');};
+$('online').onchange=()=>{const on=$('online').checked;updateEngineBadge();status(on?'Translation enabled. Network transmission depends on your chosen provider.':'Translation off: known sample phrases only.');};
 $('voiceDiag').onclick=()=>{
  const voices=availableVoices().filter(v=>String(v.lang).toLowerCase().startsWith('ko')||/선희|sunhi|seonhee|injun|인준/i.test(v.name+' '+v.voiceURI));
  const report=voices.map((v,i)=>({index:i,name:v.name,lang:v.lang,voiceURI:v.voiceURI,localService:v.localService}));
@@ -233,7 +238,7 @@ $('voiceDiag').onclick=()=>{
 $('direction').onchange=()=>populateVoices();
 $('rate').oninput=()=>{$('rateval').textContent=Number($('rate').value).toFixed(2)+'×'};
 if('speechSynthesis' in window){populateVoices();speechSynthesis.addEventListener('voiceschanged',populateVoices)}
-$('badge').textContent=$('online').checked?'● MyMemory online':'● Demo phrasebook';
+updateEngineBadge();
 render();
 })();
 </script></body></html>
