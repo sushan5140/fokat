@@ -12,11 +12,18 @@
 <div style="flex:1;min-width:230px"><strong>Translation Engine 2.0 — preview</strong>
 <div class="small muted">Online sends text to MyMemory. On-device uses Edge's built-in model when supported; the first language-pack download needs your approval. Auto uses on-device only when installed.</div></div>
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-<label class="toggle" for="engine">Provider <select id="engine" aria-label="Translation provider"><option value="online">MyMemory online</option><option value="auto">Auto: local if ready</option><option value="device">On-device only (beta)</option></select></label>
+<label class="toggle" for="engine">Provider <select id="engine" aria-label="Translation provider"><option value="online">MyMemory online</option><option value="auto">Auto: local if ready</option><option value="device">On-device only (beta)</option><option value="smart">Smart contextual (requires backend)</option></select></label>
 <button class="ghost" id="prepareDevice" type="button">Prepare on-device model</button>
 <label class="toggle" style="font-weight:800;font-size:14px;cursor:pointer"><input type="checkbox" id="online" checked style="width:21px;height:21px"> Translation enabled</label>
 </div></div>
-<div class="actionrow"><label class="toggle"><input id="save" type="checkbox"> Save conversations on this device (opt-in)</label><div class="actions"><button class="ghost" id="export">Export JSON</button><button class="ghost" id="metrics">Export timings</button><button class="ghost" id="clear">Delete current</button></div></div>
+<div class="panel" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+<label class="toggle"><input type="checkbox" id="context" checked> Use recent conversation context</label>
+<label class="toggle">Korean style <select id="honorific"><option value="auto">Auto (polite default)</option><option value="polite" selected>Polite · 해요체</option><option value="formal">Formal · 합니다체</option><option value="casual">Casual · 반말</option></select></label>
+<label class="toggle">Relationship <select id="relationship"><option value="unspecified">Not specified</option><option value="stranger">Stranger</option><option value="staff">Service staff</option><option value="friend">Friend</option><option value="professor">Professor / senior</option></select></label>
+<label class="toggle">Situation <select id="situation"><option value="general">General</option><option value="travel">Travel</option><option value="shopping">Shopping</option><option value="school">School</option><option value="work">Work</option><option value="emergency">Emergency</option></select></label>
+<label class="toggle">Smart API URL <input id="smartUrl" type="url" placeholder="https://your-backend.vercel.app" style="max-width:270px"></label>
+<div class="small muted">Smart context and style apply only when a configured backend responds. Without it, basic translation is used and visibly labeled. Last six earlier turns may be sent to the configured provider.</div>
+</div><div class="actionrow"><label class="toggle"><input id="save" type="checkbox"> Save conversations on this device (opt-in)</label><div class="actions"><button class="ghost" id="export">Export JSON</button><button class="ghost" id="metrics">Export timings</button><button class="ghost" id="clear">Delete current</button></div></div>
 <div class="chat" id="chat" role="log" aria-live="polite"></div>
 <div class="composer"><textarea id="message" placeholder="Type a phrase, or tap the microphone…" aria-label="Message" maxlength="8000"></textarea><button class="ghost" id="mic" title="Dictate one utterance">🎙 Mic</button><button class="button" id="send">Send ↗</button></div><div class="status" role="status" id="status"></div><div class="foot">⚠️ Online translation sends entered text to MyMemory; it is enabled by default and can be switched off. On-device translation requires browser, hardware and local model support; it is not an AI context model. Quality warnings are heuristics, not confidence scores. Browser dictation may send audio to your browser provider. Ask permission before recording people. Select 'Other person speaking' to label the next turn, swap source language when necessary, and tap Mic for each turn to avoid accidentally replaying its own speech. Playback follows your browser/OS audio route; no Bluetooth speaker override is implemented.</div></main></div>
 <script src="./translation-engine.js"></script>
@@ -47,7 +54,7 @@ function persist(){if($('save').checked)localStorage.setItem(key,JSON.stringify(
 function createSession(){const s={id:String(Date.now())+'-'+Math.random().toString(36).slice(2,6),name:'New conversation',created:new Date().toISOString(),messages:[]};sessions.unshift(s);current=s.id;ephemeral=[];persist();render();return s}
 function getSession(){return sessions.find(s=>s.id===current)||null}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='Edge on-device'?'On-device · local model · review accuracy':m.provider==='edited'?'Manually corrected':m.provider==='reviewed'?'Reviewed exact phrase':'Verified phrasebook')+'</div>':'')+(m.warnings?.length?'<div class="provenance" style="color:#925d24">⚠ '+esc(m.warnings.join(' · '))+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
+function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='Edge on-device'?'On-device · local model · review accuracy':m.provider==='Smart contextual'?'Smart contextual · check style and meaning':m.provider==='edited'?'Manually corrected':m.provider==='reviewed'?'Reviewed exact phrase':'Verified phrasebook')+'</div>':'')+(m.warnings?.length?'<div class="provenance" style="color:#925d24">⚠ '+esc(m.warnings.join(' · '))+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
 const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선히 Online (Natural)','Microsoft 인준 Online (Natural)'];
@@ -102,6 +109,30 @@ $('interrupt').onclick=stopEverything;
 let translationBusy=false;
 async function runTranslation(m,forcedProvider=null){
  const source=m.lang,target=source==='en'?'ko':'en';
+ const smart=$('engine').value==='smart';
+ if(smart){
+  const endpoint=$('smartUrl').value.trim().replace(/\/+$/,'');
+  const historyItems=(getSession()?.messages||ephemeral);
+  const previous=historyItems.filter(x=>x!==m&&new Date(x.at)<=new Date(m.at)).slice(-6);
+  const history=$('context').checked?previous.map(x=>({speaker:x.who==='other'?'other':'me',text:String(x.text).slice(0,350)})):[];
+  if(endpoint&&/^https:\/\//.test(endpoint)){
+   const ctrl=new AbortController();requestController=ctrl;
+   const timer=setTimeout(()=>ctrl.abort(),18000);
+   try{
+    const response=await fetch(endpoint+'/api/translate-context',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({text:m.text.slice(0,3500),source,target,style:$('honorific').value,relationship:$('relationship').value,situation:$('situation').value,history})});
+    if(response.ok){
+     const result=await response.json();
+     if(typeof result.translation==='string'&&result.translation.trim()){
+      m.translation=result.translation.trim();m.ok=true;m.provider='Smart contextual';m.register=result.register_used;m.warnings=result.warnings||[];m.note=(result.notes||[]).join(' · ');return;
+     }
+    }
+    status('Smart backend unavailable; using MyMemory basic fallback.');
+   }catch(error){if(ctrl.signal.aborted&&interrupted)throw error;status('Smart unavailable; using MyMemory basic fallback.')}
+   finally{clearTimeout(timer);if(requestController===ctrl)requestController=null}
+  }else status('Smart backend URL missing; basic MyMemory fallback.');
+  const fallback=await FokatTranslation.translate({text:m.text,source,target,provider:'online',onProgress:status});
+  m.translation=fallback.text;m.ok=true;m.provider='MyMemory';m.warnings=[...(fallback.warnings||[]),'Basic fallback: context and honorific control were not applied.'];return;
+ }
  const reviewed=reviewedTranslation(source,m.text);
  if(reviewed){
   m.translation=reviewed.text;m.ok=true;m.provider=reviewed.provider;m.note=reviewed.note;m.warnings=reviewed.note?[reviewed.note]:[];
@@ -201,13 +232,14 @@ $('turns').onchange=()=>{if($('turns').checked){$('other').checked=false;$('dire
 $('autoflow').onchange=()=>status($('autoflow').checked?'Voice mode: microphone captures one utterance, translates it, and speaks once. Tap Mic again for the next turn.':'Voice mode off: dictation fills the text box for review.');
 function updateEngineBadge(){
  const on=$('online').checked,engine=$('engine').value;
- $('badge').textContent=!on?'● Translation off':engine==='device'?'● Edge on-device selected':engine==='auto'?'● Auto provider':'● MyMemory online';
+ $('badge').textContent=!on?'● Translation off':engine==='device'?'● Edge on-device selected':engine==='auto'?'● Auto provider':engine==='smart'?'● Smart mode selected':'● MyMemory online';
 }
 $('engine').onchange=async()=>{
  updateEngineBadge();
  const selected=$('engine').value;
  if(selected==='online')status('MyMemory online selected. Text goes to a third party.');
  if(selected==='auto')status('Auto: on-device if already available, otherwise MyMemory online.');
+ if(selected==='smart')status('Smart needs a configured backend. Missing backend means labeled basic fallback.');
  if(selected==='device'){
   const from=$('direction').value==='en-ko'?'en':'ko',to=from==='en'?'ko':'en';
   const availability=await FokatTranslation.deviceAvailability(from,to);
