@@ -1,46 +1,47 @@
-# fokat.
-**Talk freely. Understand better.**
+# fokat. — talk freely
 
-Fokat is an experimental multilingual conversation interface for travelers and face-to-face conversations. It aims to connect spoken language translation, hands-free listening, and opt-in dialogue memory.
+Fokat is an **English ↔ Korean conversation translation research prototype** built for web-first testing. It supports browser speech recognition, browser TTS, optional local conversation history, and multiple translation engines.
 
-> Status: Phase 2 — guided push-to-talk speech recognition → translation → spoken reply wired together. Real-world translation quality, browser CORS/runtime behavior, Bluetooth routing, and speaker isolation are **not validated**.
+**Status (October 2026): Translation Engine 2.0a integrated, not a complete context-aware translator.** The available engines are MyMemory online and an experimental browser on-device Translator API. The original phrasebook remains a verified fallback for specific phrases, not a substitute for general translation. Full end-to-end browser and device tests are pending.
 
-## Live prototype
-Open `index.html` in a recent Chrome/Edge browser, or enable GitHub Pages (Settings → Pages → Deploy from branch → main / root).
+## Run Fokat
+- Development: https://sushan5140.github.io/fokat/
+- Translation baseline lab: https://sushan5140.github.io/fokat/benchmark.html
+- From a local checkout, open `index.html` in a supported browser (or serve via local HTTP). The app loads `translation-engine.js` from the same directory.
+- GitHub Pages publishes `index.html`, `benchmark.html`, and `translation-engine.js` through `.github/workflows/pages.yml`. Vercel is reserved for later production use.
 
-## Implemented in Phase 0
-- Responsive two-person conversation interface (English ↔ Korean).
-- User-activated microphone dictation using browser SpeechRecognition where supported.
-- Speech playback using built-in browser text-to-speech voices (subject to installed voices).
-- Explicit opt-in local conversation history; clear/delete/export JSON.
-- Manual text entry, conversation switching, and starter demo dialogue.
-- Transparent **demo phrasebook**: only predefined phrases are translated. Unmatched text is clearly marked as **not translated**. Never mistaken for general-purpose AI translation.
-- No external API requests or credentials.
+## Translation Engine 2.0a (new)
+The **Provider** selector offers:
+1. **MyMemory online** (default). General text translation via the public third-party service; internet access required. Requests respect a 450-UTF-8-byte section budget. Longer text is translated sequentially (up to 20 sections and 8,000 input characters), with a warning about context lost at section boundaries.
+2. **Auto: local if ready**. Prefers Edge/Chrome's built-in Translator API *only if the specified language model is already available*; otherwise uses MyMemory. If it uses MyMemory, your input leaves your device.
+3. **On-device only (beta)**. Attempts the browser-native Translator API with no online fallback. Hardware/browser/language-pack compatibility varies. Click **Prepare on-device model** to explicitly approve initial model download for the current direction; repeat for the reverse direction. The browser may reject this on unsupported devices.
 
-## Phase 1 integration\n- Optional MyMemory public translation API mode for English ↔ Korean, using a live HTTP request on each submitted phrase. No provider key is needed for the basic public endpoint, but quotas and availability may change.\n- Disabled by default. Enabling it sends entered or browser-dictated text to MyMemory (a third party); do not transmit private information.\n- Explicit errors, 12-second timeout, pending state, and provider-result label in the message data.\n- Existing demo phrasebook remains the offline default; it is **not** general-purpose translation.\n- Static JavaScript syntax checked after commit, but actual network requests, cross-origin policy, browser speech recognition, and audio-device behavior have **not** been verified in a live browser.\n\n## Phase 2 guided voice mode\n- Enable **Voice conversation mode** and (optionally) **Online translation**. Tap Mic, speak one phrase, and let recognition stop before translation/playback.\n- Uses browser speech recognition and browser TTS, with recognition disabled during speech playback to reduce feedback loops. Manually tap Mic again for each turn.\n- Swap direction to interpret the other participant; this does not identify speakers automatically.\n- Audio playback follows the browser and operating system output device; Bluetooth routing is **not controlled** by Fokat.\n- JavaScript syntax validated after integration; full browser and Android hardware testing pending.\n\n## Not implemented yet
-- Validated, uninterrupted real-time speech interpretation. Guided push-to-talk steps are wired but unbenchmarked.
-- Continuous listening, automatic speaker identification, echo cancellation validation.
-- Native Android Bluetooth output routing and background support.
-- Offline translation packs or encrypted local database. Browser localStorage is not encrypted; avoid sensitive content.
+**Translation enabled** can be switched off. With it off, only known demo/reviewed phrases translate.
 
-## Research question
-Can an interruption-resistant speech workflow plus understandable, searchable session memory reduce interaction burden compared to conventional translation interfaces?
+**Visible safeguards**: distinguish provider source, error states, request retry, user corrections, output-language/numeral/context warnings, and the current speaker's text vs translated reply. These warnings are lightweight heuristics, **not calibrated confidence scores**.
 
-## Prototype evaluation plan
-Compare against a standard translation workflow under consented English/Korean role-play tasks:
-1. Task completion and successful clarification rate.
-2. Time to understandable translated output.
-3. Number of manual repairs/restarts.
-4. Word error rate and semantic adequacy, evaluated separately for STT and translation.
-5. History retrieval speed and perceived utility.
+**Important limits**:
+- Neither MyMemory nor the built-in Translator API currently implements our planned contextual intent/honorific pipeline. The model may mistranslate idioms, subjects, register, negation, and names.
+- Manually reviewed exact-phrase overrides fix *observed* issues only; they do not generalize to other expressions.
+- MyMemory is a free-to-try third-party service with rate/usage limits and possible CORS, quota, or network failure. Do not send sensitive conversations.
+- Edge/Chrome on-device models require compatible desktop browsers and hardware; the app cannot guarantee on-device mode will work. Local models need initial download.
+- Browser SpeechRecognition may use external speech services; browser TTS/voice availability varies by device. Neither Bluetooth routing nor continuous listening is validated.
 
-Keep raw measurements, versions, environment, and failures. Do not present demo phrases as model results.
+## Tests and research
+- `node --test tests/translation-engine.test.cjs` — offline unit tests (Node 22+ recommended). No paid API calls or live provider requests.
+- `.github/workflows/translation-tests.yml` — runs those tests on relevant pushes and pull requests.
+- `TRANSLATION_TESTS.md` — EN↔KO manual acceptance cases and quality review criteria.
+- `benchmark.html` — interactive MyMemory baseline: 14 examples, manual semantic rating, export CSV/JSON. It does **not** claim comparative superiority. Provider comparison remains future work.
 
-## Web-first decision (October 2026)\nThe web application is the primary product and research testbed. Native Android development is paused. The `android/` directory remains an experimental hardware-feasibility scaffold, not an APK release path or a verified mobile application. Do not migrate features or develop an APK until the web experience works and has been tested.\n\nWeb validation priorities: live bilingual voice turns, browser-device audio behavior, robust consent-based history, mobile UI, and error/latency measurements. Web browser audio routing may not support independent earbud-versus-phone outputs.\n\n## Next technical phase
-Implement a replaceable pipeline for ASR, translation, and TTS, beginning with push-to-talk rather than unbounded ambient recording. Then build an Android prototype for genuine Bluetooth earbud/phone-speaker routing and permissions.
+## Roadmap (web first)
+- **4.5b — Contextual engine:** secure and cost-capped model backend (or proven free alternative), polite/natural/casual Korean register, context-window consent, meaning checks, fair provider benchmarks. **Not deployed yet.**
+- **5 — Bluetooth/listening:** controlled push-to-talk improvements, browser-output feasibility tests, then native Android only if required for separate earbuds/speaker routing.
+- **6 — Conversation memory:** search, bookmarks, corrections and replay (privacy first).
+- **7 — UI/UX & reliability:** performance, recoverability, desktop/mobile testing.
+- **8 — Research:** controlled evaluation, reliability and semantic-quality benchmarks, professor-ready report.
 
 ## Privacy
-Conversation saving is opt-in. The demo stores text in this browser's localStorage until cleared; it is not end-to-end encrypted. Only record/save speech when everyone involved agrees and local law permits.
+Local conversation saving is opt-in and uses unencrypted localStorage; do not store secrets. **MyMemory sends text to a third party** when used. The on-device Translator API can keep translation text on the device *after language pack download*, where supported. Browser speech recognition may still transmit audio to browser services. Get consent before recording or saving others.
 
 ## Team
 Founded by Susan and Shruti.
