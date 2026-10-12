@@ -9,12 +9,17 @@
 <main class="main"><div class="top"><div class="eyebrow">MULTILINGUAL CONVERSATION LAB</div><div class="pill" id="badge">● Demo phrasebook</div></div><section class="hero"><div><h1>Every voice deserves<br>to be heard.</h1><p>Speak. Understand. Remember.</p></div><div class="circle" aria-hidden="true">◉</div></section>
 <div class="controls"><select id="direction" aria-label="Translation direction"><option value="en-ko">English → Korean</option><option value="ko-en">Korean → English</option></select><button class="ghost" id="swap">⇄ Swap</button><a class="ghost" href="./benchmark.html" style="text-decoration:none;display:inline-flex;align-items:center">Translation Lab ↗</a><button class="ghost" id="demo">Load demo exchange</button><button class="ghost" id="interrupt">■ Interrupt / stop</button><label class="toggle"><input id="autoflow" type="checkbox"> Voice conversation mode</label><label class="toggle"><input id="other" type="checkbox"> Other person speaking</label><label class="toggle"><input id="turns" type="checkbox"> Alternate speakers after each turn</label><label class="toggle"><input id="autoplay" type="checkbox" checked> Speak translations</label><button class="ghost" id="voiceDiag" type="button">Inspect Korean voices</button><select id="voice" aria-label="Speech voice"><option value="">Auto-select voice</option></select><label class="toggle">Speed <input id="rate" type="range" min="0.75" max="1.15" step="0.05" value="0.95"></label><span id="rateval" class="small">0.95×</span></div>
 <div class="panel" style="background:#effbdc;border:2px solid #b5dc7b;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-<div style="flex:1;min-width:220px"><strong>Translation engine</strong><div class="small muted">Real sentences use MyMemory online by default. Text is sent to a third party; turn OFF for private demo-only mode.</div></div>
-<label class="toggle" style="font-weight:800;font-size:15px;cursor:pointer"><input type="checkbox" id="online" checked style="width:21px;height:21px"> Real translation ON</label>
-</div>
+<div style="flex:1;min-width:230px"><strong>Translation Engine 2.0 — preview</strong>
+<div class="small muted">Online sends text to MyMemory. On-device uses Edge's built-in model when supported; the first language-pack download needs your approval. Auto uses on-device only when installed.</div></div>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<label class="toggle" for="engine">Provider <select id="engine" aria-label="Translation provider"><option value="online">MyMemory online</option><option value="auto">Auto: local if ready</option><option value="device">On-device only (beta)</option></select></label>
+<button class="ghost" id="prepareDevice" type="button">Prepare on-device model</button>
+<label class="toggle" style="font-weight:800;font-size:14px;cursor:pointer"><input type="checkbox" id="online" checked style="width:21px;height:21px"> Translation enabled</label>
+</div></div>
 <div class="actionrow"><label class="toggle"><input id="save" type="checkbox"> Save conversations on this device (opt-in)</label><div class="actions"><button class="ghost" id="export">Export JSON</button><button class="ghost" id="metrics">Export timings</button><button class="ghost" id="clear">Delete current</button></div></div>
 <div class="chat" id="chat" role="log" aria-live="polite"></div>
-<div class="composer"><textarea id="message" placeholder="Type a phrase, or tap the microphone…" aria-label="Message" maxlength="2000"></textarea><button class="ghost" id="mic" title="Dictate one utterance">🎙 Mic</button><button class="button" id="send">Send ↗</button></div><div class="status" role="status" id="status"></div><div class="foot">⚠️ External translation is opt-in and sends entered text to MyMemory. Otherwise, only sample phrases translate. Browser dictation may send audio to your browser provider. Ask permission before recording people. Select 'Other person speaking' to label the next turn, swap source language when necessary, and tap Mic for each turn to avoid accidentally replaying its own speech. Playback follows your browser/OS audio route; no Bluetooth speaker override is implemented.</div></main></div>
+<div class="composer"><textarea id="message" placeholder="Type a phrase, or tap the microphone…" aria-label="Message" maxlength="8000"></textarea><button class="ghost" id="mic" title="Dictate one utterance">🎙 Mic</button><button class="button" id="send">Send ↗</button></div><div class="status" role="status" id="status"></div><div class="foot">⚠️ Online translation sends entered text to MyMemory; it is enabled by default and can be switched off. On-device translation requires browser, hardware and local model support; it is not an AI context model. Quality warnings are heuristics, not confidence scores. Browser dictation may send audio to your browser provider. Ask permission before recording people. Select 'Other person speaking' to label the next turn, swap source language when necessary, and tap Mic for each turn to avoid accidentally replaying its own speech. Playback follows your browser/OS audio route; no Bluetooth speaker override is implemented.</div></main></div>
+<script src="./translation-engine.js"></script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
@@ -42,7 +47,7 @@ function persist(){if($('save').checked)localStorage.setItem(key,JSON.stringify(
 function createSession(){const s={id:String(Date.now())+'-'+Math.random().toString(36).slice(2,6),name:'New conversation',created:new Date().toISOString(),messages:[]};sessions.unshift(s);current=s.id;ephemeral=[];persist();render();return s}
 function getSession(){return sessions.find(s=>s.id===current)||null}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='edited'?'Manually corrected':m.provider==='reviewed'?'Reviewed exact phrase':'Verified phrasebook')+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
+function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='Edge on-device'?'On-device · local model · review accuracy':m.provider==='edited'?'Manually corrected':m.provider==='reviewed'?'Reviewed exact phrase':'Verified phrasebook')+'</div>':'')+(m.warnings?.length?'<div class="provenance" style="color:#925d24">⚠ '+esc(m.warnings.join(' · '))+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
 const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선히 Online (Natural)','Microsoft 인준 Online (Natural)'];
@@ -94,51 +99,72 @@ function speakTranslation(msg){return new Promise(resolve=>{
 function nextTurn(){if(!$('turns').checked)return;$('other').checked=!$('other').checked;$('direction').value=$('other').checked?'ko-en':'en-ko';populateVoices();status('Ready for '+($('other').checked?'other speaker (Korean)':'you (English)')+'. Tap Mic again.')}
 function stopEverything(){interrupted=true;recognition?.abort();recognition=null;requestController?.abort();requestController=null;if(speechFinish)speechFinish(false);if('speechSynthesis' in window)speechSynthesis.cancel();document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';voiceBusy=false;status('Stopped. Tap Mic for the next turn.')}
 $('interrupt').onclick=stopEverything;
-async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const reviewed=reviewedTranslation(source,text);const translation=reviewed?.text;const online=$('online').checked;const msg={who,lang:source,text,translation:translation||null,ok:!!translation,pending:online&&!translation,error:null,provider:reviewed?.provider||null,note:reviewed?.note||null,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online||translation){status(translation?'Translated with verified phrasebook':'Demo mode only. Enable real translation (MyMemory) above.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
-status('Translating with MyMemory…');
-try{
- if(new TextEncoder().encode(text).length>500)throw Error('Input exceeds 500 bytes');
- const url=new URL('https://api.mymemory.translated.net/get');
- url.searchParams.set('q',text);url.searchParams.set('langpair',source+'|'+target);
- const controller=new AbortController();requestController=controller;const timeout=setTimeout(()=>controller.abort(),12000);
- let response;try{response=await fetch(url.toString(),{signal:controller.signal})}finally{clearTimeout(timeout);if(requestController===controller)requestController=null}
- if(interrupted)throw Error('Interrupted');if(!response.ok)throw Error('HTTP '+response.status);
- const data=await response.json();
- if(data.responseStatus!==200||!data.responseData?.translatedText)throw Error('Provider rejected translation: '+String(data.responseDetails||data.responseStatus));
- const candidate=String(data.responseData.translatedText).trim();
- if(source==='en'&&target==='ko'&&!/[가-힣]/.test(candidate))throw Error('Provider did not return Korean text');
- if(source==='en'&&text.trim().split(/\s+/).length<=2&&candidate.length>Math.max(60,text.length*7))throw Error('Suspiciously long result for a short phrase');
- msg.translation=candidate;msg.ok=true;msg.provider='MyMemory';msg.error=null;
- status('Online translation received; verify important meanings.');
-}catch(error){msg.ok=false;msg.error=String(error.message||error);status('Translation failed: '+msg.error+'. Check network or provider limits.')}
-finally{msg.pending=false;persist();render()}
-timings.push({mode:'remote',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});
-if(!interrupted&&$('autoflow').checked&&$('autoplay').checked&&msg.ok){status('Playing translated reply. Microphone remains paused.');await speakTranslation(msg)}
-if(!interrupted&&$('autoflow').checked)nextTurn();
-return msg;
+let translationBusy=false;
+async function runTranslation(m,forcedProvider=null){
+ const source=m.lang,target=source==='en'?'ko':'en';
+ const reviewed=reviewedTranslation(source,m.text);
+ if(reviewed){
+  m.translation=reviewed.text;m.ok=true;m.provider=reviewed.provider;m.note=reviewed.note;m.warnings=reviewed.note?[reviewed.note]:[];
+  return;
+ }
+ const mode=forcedProvider||$('engine').value;
+ const controller=new AbortController();requestController=controller;
+ try{
+  const result=await FokatTranslation.translate({text:m.text,source,target,provider:mode,
+   signal:controller.signal,onProgress:status});
+  if(controller.signal.aborted||interrupted)throw Error('Translation interrupted.');
+  m.translation=result.text;m.ok=true;m.error=null;m.provider=result.provider;m.warnings=result.warnings;
+  m.segments=result.segments;
+ }finally{if(requestController===controller)requestController=null}
+}
+async function add(text,who='me',lang=null){
+ const requestStart=performance.now();
+ text=text.trim();if(!text)return;
+ if(translationBusy){status('Wait for the current translation, or press Stop.');return}
+ interrupted=false;
+ const source=lang||($('direction').value==='en-ko'?'en':'ko');
+ const target=source==='en'?'ko':'en';
+ const reviewed=reviewedTranslation(source,text),enabled=$('online').checked;
+ const msg={who,lang:source,text,translation:null,ok:false,pending:enabled,error:null,provider:null,at:new Date().toISOString()};
+ let conv=getSession();
+ if($('save').checked){if(!conv)conv=createSession();conv.messages.push(msg);if(conv.messages.length===1)conv.name=text.slice(0,26)}
+ else ephemeral.push(msg);
+ persist();render();
+ if(!enabled){
+  if(reviewed){msg.translation=reviewed.text;msg.ok=true;msg.provider=reviewed.provider;msg.note=reviewed.note}
+  else msg.error='Translation disabled. Enable it for arbitrary sentences.';
+  msg.pending=false;persist();render();status(msg.ok?'Translated from verified examples.':'Translation disabled.');
+  timings.push({mode:'demo',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});
+  return msg;
+ }
+ translationBusy=true;$('send').disabled=true;status('Translating…');
+ try{
+  await runTranslation(msg);
+  status('Translated using '+msg.provider+'. Review meaning and warnings.');
+ }catch(error){
+  msg.ok=false;msg.error=String(error.message||error);
+  status('Translation failed: '+msg.error);
+ }finally{
+  translationBusy=false;$('send').disabled=false;msg.pending=false;persist();render();
+ }
+ timings.push({mode:msg.provider||$('engine').value,language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});
+ if(!interrupted&&$('autoflow').checked&&$('autoplay').checked&&msg.ok){
+  status('Playing translated response.');await speakTranslation(msg);
+ }
+ if(!interrupted&&$('autoflow').checked)nextTurn();
+ return msg;
 }
 async function retryMessage(i){
- const m=(getSession()?.messages||ephemeral)[i];if(!m)return;
- if(!$('online').checked){status('Turn on real translation to retry.');return}
- if(m.pending)return;
- m.ok=false;m.pending=true;m.error=null;persist();render();
- const target=m.lang==='en'?'ko':'en';
- const reviewed=reviewedTranslation(m.lang,m.text);
- if(reviewed){m.translation=reviewed.text;m.provider=reviewed.provider;m.note=reviewed.note;m.ok=true;m.pending=false;persist();render();status('Reviewed translation restored.');return}
- const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),12000);
+ const m=(getSession()?.messages||ephemeral)[i];
+ if(!m||m.pending||translationBusy)return;
+ if(!$('online').checked){status('Enable translation to retry.');return}
+ m.ok=false;m.pending=true;m.error=null;
+ translationBusy=true;$('send').disabled=true;persist();render();
  try{
-  if(new TextEncoder().encode(m.text).length>500)throw Error('Input exceeds provider limit of 500 bytes');
-  const url=new URL('https://api.mymemory.translated.net/get');
-  url.searchParams.set('q',m.text);url.searchParams.set('langpair',m.lang+'|'+target);
-  const response=await fetch(url.toString(),{signal:ctl.signal});
-  if(!response.ok)throw Error('HTTP '+response.status);
-  const data=await response.json();
-  if(data.responseStatus!==200||!data.responseData?.translatedText)throw Error(String(data.responseDetails||'No translation'));
-  const candidate=String(data.responseData.translatedText).trim();
-  if(target==='ko'&&!/[가-힣]/.test(candidate))throw Error('Translation was not Korean');
-  m.translation=candidate;m.ok=true;m.provider='MyMemory';status('Retried with MyMemory. Review accuracy.');
- }catch(e){m.error=String(e.message||e);status('Retry failed: '+m.error)}
- finally{clearTimeout(timer);m.pending=false;persist();render()}
+  await runTranslation(m);
+  status('Retried with '+m.provider+'.');
+ }catch(error){m.ok=false;m.error=String(error.message||error);status('Retry failed: '+m.error)}
+ finally{translationBusy=false;$('send').disabled=false;m.pending=false;persist();render()}
 }
 $('chat').addEventListener('click',e=>{
  const retry=e.target.closest('[data-retry]');if(retry){retryMessage(Number(retry.dataset.retry));return}
@@ -173,6 +199,25 @@ if(automatic&&heard&&!failed&&!interrupted){voiceBusy=true;try{$('message').valu
 try{r.start()}catch(e){recognition=null;document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';status('Could not start recognition: '+e.message)}};
 $('turns').onchange=()=>{if($('turns').checked){$('other').checked=false;$('direction').value='en-ko';populateVoices();status('Alternating mode: you speak English first; the other person speaks Korean next. Tap Mic per turn.')}else status('Manual speaker and language selection enabled.')};
 $('autoflow').onchange=()=>status($('autoflow').checked?'Voice mode: microphone captures one utterance, translates it, and speaks once. Tap Mic again for the next turn.':'Voice mode off: dictation fills the text box for review.');
+$('engine').onchange=async()=>{
+ const selected=$('engine').value;
+ if(selected==='online')status('MyMemory online selected. Text goes to a third party.');
+ if(selected==='auto')status('Auto: on-device if already available, otherwise MyMemory online.');
+ if(selected==='device'){
+  const from=$('direction').value==='en-ko'?'en':'ko',to=from==='en'?'ko':'en';
+  const availability=await FokatTranslation.deviceAvailability(from,to);
+  status('On-device '+from+' → '+to+': '+availability+'. Press Prepare if downloadable.');
+ }
+};
+$('prepareDevice').onclick=()=>{
+ const from=$('direction').value==='en-ko'?'en':'ko',to=from==='en'?'ko':'en';
+ if(!confirm('Prepare Edge on-device '+from+' → '+to+'? This may download a language model and requires supported hardware.'))return;
+ status('Preparing local translator. This may take time…');
+ // Start model creation inside the user click context (after confirmation).
+ FokatTranslation.prepareDevice(from,to,status).then(()=>{
+  $('engine').value='device';status('On-device '+from+' → '+to+' is ready. Switch directions to prepare the other pair.');
+ }).catch(e=>status('On-device setup unavailable: '+String(e.message||e)));
+};
 $('online').onchange=()=>{const on=$('online').checked;$('badge').textContent=on?'● MyMemory online':'● Demo phrasebook';status(on?'REAL TRANSLATION ENABLED: Text will be sent to MyMemory.':'DEMO MODE: Only preset phrases translate.');};
 $('voiceDiag').onclick=()=>{
  const voices=availableVoices().filter(v=>String(v.lang).toLowerCase().startsWith('ko')||/선희|sunhi|seonhee|injun|인준/i.test(v.name+' '+v.voiceURI));
