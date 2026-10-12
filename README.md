@@ -48,3 +48,14 @@ Founded by Susan and Shruti.
 
 ## License
 To be decided.
+
+## Translation Engine 2.0b — contextual and honorific controls (experimental)
+The web UI now includes **Smart contextual** provider mode with context toggle, honorific selection (Auto / Polite / Formal / Casual), relationship, situation, and configurable Smart API URL. When a compatible backend is configured, the frontend sends the current text and up to six prior conversation turns to that backend. **These controls do not change MyMemory or on-device translation.** If Smart is unavailable, the UI uses MyMemory and warns that context/style controls did not apply.
+
+Optional Vercel-compatible backend: `api/translate-context.js`. Configure the following **server-side** environment variables on your own authorized service:
+- `SMART_TRANSLATION_API_KEY`: OpenAI-compatible provider API key (never put this in GitHub Pages HTML/JS)
+- `SMART_TRANSLATION_BASE_URL`: HTTPS provider API base URL, ending before `/chat/completions`
+- `SMART_TRANSLATION_MODEL`: model ID supported by that provider
+- `ALLOWED_ORIGINS`: comma-separated origins permitted to call the API (default GitHub Pages project origin and local dev)
+
+**Not currently configured or deployed.** The backend requires provider credentials/quotas; ₹0 unrestricted translation isn't guaranteed. For now select *Smart contextual* only to inspect the clear fallback behavior; once a backend is set up, enter its HTTPS origin in the app's Smart API URL control. The backend attempts to preserve meaning and request the chosen Korean register but is not yet empirically validated. Secure deployments must add per-user usage quotas/rate limiting, abuse prevention, logging policy and provider cost controls before enabling public traffic. No secret keys or credentials are stored in the public frontend.
