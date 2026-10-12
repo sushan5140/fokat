@@ -24,6 +24,17 @@ const phrasePairs=[
 ];
 const clean=s=>s.normalize('NFKC').trim().toLowerCase().replace(/[.!?。！？]+$/,'').trim();
 const lex={};phrasePairs.forEach(([en,ko])=>{lex['en:'+clean(en)]=ko;lex['ko:'+clean(ko)]=en});
+const reviewedOverrides={
+ ["en:"+clean("I'm down for it, but let's do it tomorrow.")]:{text:'좋아요. 근데 내일 하죠.',note:'Idiom: down for it means willing.'},
+ ["ko:"+clean('지금 출발하면 늦지 않을 거예요.')]:{text:"If we leave now, we won't be late.",note:'Korean omits the subject; we is contextual.'}
+};
+function reviewedTranslation(source,text){
+ const entry=reviewedOverrides[source+':'+clean(text)];
+ if(entry)return {text:entry.text,provider:'reviewed',note:entry.note};
+ const val=lex[source+':'+clean(text)];
+ return val?{text:val,provider:'phrasebook',note:null}:null;
+}
+
 const safeRead=()=>{try{const a=JSON.parse(localStorage.getItem(key));return Array.isArray(a)?a:[]}catch{return []}};
 let sessions=safeRead(),current=sessions[0]?.id||null,ephemeral=[],activeId=null,recognition=null,voiceBusy=false,interrupted=false,requestController=null,speechFinish=null;const timings=[];
 $('save').checked=localStorage.getItem(key)!==null;
@@ -31,7 +42,7 @@ function persist(){if($('save').checked)localStorage.setItem(key,JSON.stringify(
 function createSession(){const s={id:String(Date.now())+'-'+Math.random().toString(36).slice(2,6),name:'New conversation',created:new Date().toISOString(),messages:[]};sessions.unshift(s);current=s.id;ephemeral=[];persist();render();return s}
 function getSession(){return sessions.find(s=>s.id===current)||null}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='edited'?'Manually corrected':'Verified phrasebook')+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
+function render(){const s=getSession();$('sessions').innerHTML=sessions.map(t=>'<button class="session '+(t.id===current?'active':'')+'" data-id="'+esc(t.id)+'">'+esc(t.name)+'<small>'+new Date(t.created).toLocaleDateString()+'</small></button>').join('');const items=s?.messages||ephemeral;$('chat').innerHTML=items.length?items.map((m,i)=>'<div class="bubble '+(m.who==='me'?'me':'')+'"><div class="meta">'+(m.who==='me'?'You':'Other speaker')+' · '+esc(new Date(m.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+' · '+esc(m.lang.toUpperCase())+'</div><div class="source">'+esc(m.text)+'</div><div class="translated '+(m.ok?'':'warn')+'">'+(m.ok?esc(m.translation):(m.pending?'⏳ Translating…':'⚠ '+esc(m.error?('Translation failed: '+m.error):'Not translated — enable real translation')))+'</div>'+(m.ok?'<div class="provenance">'+esc(m.provider==='MyMemory'?'MyMemory · third-party · review accuracy':m.provider==='edited'?'Manually corrected':m.provider==='reviewed'?'Reviewed exact phrase':'Verified phrasebook')+'</div>':'')+'<div class="tools">'+(m.ok?'<button class="speaker" data-play="'+i+'">▶ Play translation</button>':'')+'<button class="speaker" data-retry="'+i+'">↻ Retry</button><button class="speaker" data-edit="'+i+'">✎ Correct</button></div></div>').join(''):'<div class="empty"><strong>A new conversation starts here.</strong>Try “hello” or “how much is this?”<br>Enable real translation to translate sentences.</div>';$('chat').scrollTop=$('chat').scrollHeight}
 function status(s){$('status').textContent=s}
 function outputLang(msg){return msg.lang==='en'?'ko-KR':'en-US'}
 const preferredVoiceNames=['Microsoft Steffan Online (Natural)','Microsoft Yan Online (Natural)','Microsoft 선히 Online (Natural)','Microsoft 인준 Online (Natural)'];
@@ -83,7 +94,7 @@ function speakTranslation(msg){return new Promise(resolve=>{
 function nextTurn(){if(!$('turns').checked)return;$('other').checked=!$('other').checked;$('direction').value=$('other').checked?'ko-en':'en-ko';populateVoices();status('Ready for '+($('other').checked?'other speaker (Korean)':'you (English)')+'. Tap Mic again.')}
 function stopEverything(){interrupted=true;recognition?.abort();recognition=null;requestController?.abort();requestController=null;if(speechFinish)speechFinish(false);if('speechSynthesis' in window)speechSynthesis.cancel();document.body.dataset.listening='false';$('mic').textContent='🎙 Mic';voiceBusy=false;status('Stopped. Tap Mic for the next turn.')}
 $('interrupt').onclick=stopEverything;
-async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const translation=lex[source+':'+clean(text)];const online=$('online').checked;const msg={who,lang:source,text,translation:translation||null,ok:!!translation,pending:online&&!translation,error:null,provider:translation?'phrasebook':null,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online||translation){status(translation?'Translated with verified phrasebook':'Demo mode only. Enable real translation (MyMemory) above.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
+async function add(text,who='me',lang=null){const requestStart=performance.now();text=text.trim();if(!text)return;const direction=$('direction').value;const source=lang||(direction==='en-ko'?'en':'ko');const target=source==='en'?'ko':'en';const reviewed=reviewedTranslation(source,text);const translation=reviewed?.text;const online=$('online').checked;const msg={who,lang:source,text,translation:translation||null,ok:!!translation,pending:online&&!translation,error:null,provider:reviewed?.provider||null,note:reviewed?.note||null,at:new Date().toISOString()};let s=getSession();if($('save').checked){if(!s)s=createSession();s.messages.push(msg);if(s.messages.length===1)s.name=text.slice(0,26)}else{ephemeral.push(msg)}persist();render();if(!online||translation){status(translation?'Translated with verified phrasebook':'Demo mode only. Enable real translation (MyMemory) above.');if($('autoflow').checked&&$('autoplay').checked&&msg.ok)await speakTranslation(msg);if(!interrupted&&$('autoflow').checked)nextTurn();timings.push({mode:'phrasebook',language:source,success:msg.ok,elapsed_ms:Math.round(performance.now()-requestStart)});return msg}
 status('Translating with MyMemory…');
 try{
  if(new TextEncoder().encode(text).length>500)throw Error('Input exceeds 500 bytes');
@@ -112,6 +123,8 @@ async function retryMessage(i){
  if(m.pending)return;
  m.ok=false;m.pending=true;m.error=null;persist();render();
  const target=m.lang==='en'?'ko':'en';
+ const reviewed=reviewedTranslation(m.lang,m.text);
+ if(reviewed){m.translation=reviewed.text;m.provider=reviewed.provider;m.note=reviewed.note;m.ok=true;m.pending=false;persist();render();status('Reviewed translation restored.');return}
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),12000);
  try{
   if(new TextEncoder().encode(m.text).length>500)throw Error('Input exceeds provider limit of 500 bytes');
