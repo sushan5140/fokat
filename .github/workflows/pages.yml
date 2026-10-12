@@ -5,6 +5,7 @@ on:
     paths:
       - "index.html"
       - "benchmark.html"
+      - "translation-engine.js"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 permissions:
@@ -28,7 +29,7 @@ jobs:
       - name: Prepare static artifact
         run: |
           mkdir -p public
-          cp index.html benchmark.html public/
+          cp index.html benchmark.html translation-engine.js public/
           touch public/.nojekyll
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
