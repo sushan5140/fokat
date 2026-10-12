@@ -1,0 +1,26 @@
+name: Translation Engine Tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "translation-engine.js"
+      - "tests/**"
+      - ".github/workflows/translation-tests.yml"
+  pull_request:
+    paths:
+      - "index.html"
+      - "translation-engine.js"
+      - "tests/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  translation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/translation-engine.test.cjs
